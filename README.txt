@@ -1,0 +1,1 @@
+The point of this project is to create a handful tool for developers who would like to interact with the nice bitcoin miner <a href="https://github.com/m0mchil/poclbm">Poclbm</a> (by <a href="https://github.com/m0mchil">m0mchil</a>)
