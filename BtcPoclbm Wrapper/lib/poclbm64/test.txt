@@ -1,0 +1,7 @@
+ 05/04/2013 01:40:04, Setting server (joshua70448.home @ stratum.bitcoin.cz:3333)
+stratum.bitcoin.cz:3333 05/04/2013 01:40:04, started OpenCL miner on platform 0, device 0 (GeForce GT 520)
+stratum.bitcoin.cz:3333 05/04/2013 01:40:04, checking for stratum...
+stratum.bitcoin.cz:3333 05/04/2013 01:40:05, no response to getwork, using as stratum
+stratum.bitcoin.cz:3333 05/04/2013 01:41:04, 0:0:GeForce GT 520 [9.974 MH/s (~0 MH/s)] [Rej: 0/0 (0.00%)]
+
+bye
