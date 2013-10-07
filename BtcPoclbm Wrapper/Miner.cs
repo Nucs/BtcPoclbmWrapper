@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Management.Automation;
@@ -14,17 +15,19 @@ using ProcessReadWriteUtils;
 namespace BtcPoclbmWrapper {
 
     public delegate void MhashUpdatedHandler(double mhps);
+    public delegate void ShareUpdatedHandler(int accepted, int rejected);
     public static class Miner {
         //sample for query: poclbm.exe --device=0 --platform=0 --verbose -r1 elibelash.elibelash:qweqwe@api2.bitcoin.cz:8332 
         
         #region Properties and Events
 
         public static event MhashUpdatedHandler MhashUpdated;
+        public static event ShareUpdatedHandler SharesUpdated;
 
         private static string _minerAppTarget = "poclbm.exe";
         private static string _minerLocation = "\\";
         private const string POCLBM_DEVICE_MATCH_PATTERN = @"^\[(?<id>\d+)\]\s+(?<device>.*)\b(?:.*)?$";
-        private const string POCLBM_HASH_MATH_PATTERN = @"^.*\s\[(?<hps>\d+\.\d+)\s[MmKkTt]H/s.*$";
+        private const string POCLBM_HASH_MATH_PATTERN = @"^(?=.*(\d+\/(?<shares>\d+)))(?=.*((?<rejects>\d+)\/\d+))(?=.*(((?<hps>\d+\d+\.\d+)\s[MmKkTtGg]H/s)))"; //for: "stratum.bitcoin.cz:3333 [0.260 MH/s (~0 MH/s)] [Rej: 1/2 (0.00%)]"
         private static readonly Regex _regex_hash = new Regex(POCLBM_HASH_MATH_PATTERN);
         /// <summary>
         /// The location of the software directory. Empty by default, meaning the it is in the root program.
@@ -71,7 +74,7 @@ namespace BtcPoclbmWrapper {
         /// Is currently mining
         /// </summary>
         public static bool IsMining {
-            get { return IsOpen && (CollectFeedback != false && MhashPerSecond > 0); }
+            get { return IsOpen && MhashPerSecond > 0; }
         }
 
         /// <summary>
@@ -86,10 +89,11 @@ namespace BtcPoclbmWrapper {
         /// </summary>
         public static double MhashPerSecond {
             get { return _megaHashPerSecond; }
-            private set { if (!_props_locked) _megaHashPerSecond = value; }
+            private set { _megaHashPerSecond = value; }
         }
 
-        /// <summary>
+        /* Disabled atm.
+         * /// <summary>
         /// Should <see cref="MhashPerSecond"/> be collected from the poclbm process?
         /// True by default.
         /// </summary>
@@ -101,6 +105,20 @@ namespace BtcPoclbmWrapper {
                 if (value == false)
                     _megaHashPerSecond = -1;
             }
+        }*/
+
+        /// <summary>
+        /// The shares that were accepted by now from the mining pool.
+        /// </summary>
+        public static int Shares {
+            get { return _shares; }
+        }
+
+        /// <summary>
+        /// The shares that were accepted by now from the mining pool.
+        /// </summary>
+        public static int Rejects {
+            get { return _rejects; }
         }
         
         /// <summary>
@@ -109,12 +127,13 @@ namespace BtcPoclbmWrapper {
         public static readonly int SystemBits;
 
         private static Process _miner = null; //the miner proc
-        private static double _megaHashPerSecond;
-        private static bool _props_locked = false; //prevent _megaHashPerSecond writing till started again.
+        private static double _megaHashPerSecond = -1d;
         private static StreamReader _redirected_reader = null;
         private static StreamWriter _redirected_writer = null;
         private static bool _collectFeedback = true;
         private static ProcessIOManager io_proc = null;
+        private static int _shares = -1;
+        private static int _rejects = -1;
 
         static Miner() {
             SystemBits = string.IsNullOrEmpty(Environment.GetEnvironmentVariable("PROCESSOR_ARCHITEW6432")) ? 32 : 64;
@@ -138,7 +157,6 @@ namespace BtcPoclbmWrapper {
             if (IsOpen)
                 throw new InvalidOperationException("Unable to start because there is a miner already open");
 
-            _props_locked = false;
             url = url.Replace("http://", "");
             var args = string.Format("http://{0}:{1}@{2}:{3}", username, password, url, port);
 
@@ -172,7 +190,7 @@ namespace BtcPoclbmWrapper {
                     if (_miner.HasExited == false)
                         _miner.Kill();
                 } catch (Exception) {
-                    if (_miner != null)
+                    if (_miner != null) //after compiling it seemed that gc automatically set it as null after calling Kill(), even if it fails from lack of permission.
                         _miner.Close();
                 }
                 _miner = null;
@@ -189,7 +207,8 @@ namespace BtcPoclbmWrapper {
             io_proc = null;
             //all set to null because non of them have a property for Disposed
             _megaHashPerSecond = -1; //represents that the miner is not mining. wont be updated till the first feedback from miner
-            _props_locked = true; //prevents _megaHashPerSecond writing till started again.
+            _shares = -1;
+            _rejects = -1;
         }
 
         /// <summary>
@@ -222,9 +241,25 @@ namespace BtcPoclbmWrapper {
 
             var m = _regex_hash.Match(l);
             if (m.Success) {
+                //Mhash handling
                 MhashPerSecond = double.Parse(m.Groups["hps"].Value);
                 if (MhashUpdated != null)
                     MhashUpdated(MhashPerSecond);
+
+                //Shares/Rejects handling
+                var changed = false;
+                if (m.Groups["shares"].Value.Equals(_shares.ToString(CultureInfo.InvariantCulture)) == false) {
+                    _shares = Convert.ToInt32(m.Groups["shares"].Value);
+                    changed = true;
+                }
+
+                if (m.Groups["rejects"].Value.Equals(_rejects.ToString(CultureInfo.InvariantCulture)) == false) {
+                    _rejects = Convert.ToInt32(m.Groups["rejects"].Value);
+                    changed = true;
+                }
+
+                if (SharesUpdated != null && changed)
+                    SharesUpdated(_shares, _rejects);
             }
         }
         #endregion
