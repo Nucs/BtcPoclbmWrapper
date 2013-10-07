@@ -27,7 +27,7 @@ namespace BtcPoclbmWrapper {
         private static string _minerAppTarget = "poclbm.exe";
         private static string _minerLocation = "\\";
         private const string POCLBM_DEVICE_MATCH_PATTERN = @"^\[(?<id>\d+)\]\s+(?<device>.*)\b(?:.*)?$";
-        private const string POCLBM_HASH_MATH_PATTERN = @"^(?=.*(\d+\/(?<shares>\d+)))(?=.*((?<rejects>\d+)\/\d+))(?=.*(((?<hps>\d+\d+\.\d+)\s[MmKkTtGg]H/s)))"; //for: "stratum.bitcoin.cz:3333 [0.260 MH/s (~0 MH/s)] [Rej: 1/2 (0.00%)]"
+        private const string POCLBM_HASH_MATH_PATTERN = @"^(?=.*(\d+\/(?<shares>\d+)))(?=.*((?<rejects>\d+)\/\d+))(?=.*(\D(?<hps>\d+\.\d+)\s[MmKkTtGg]H/s))"; //for: "stratum.bitcoin.cz:3333 [0.260 MH/s (~0 MH/s)] [Rej: 1/2 (0.00%)]"
         private static readonly Regex _regex_hash = new Regex(POCLBM_HASH_MATH_PATTERN);
         /// <summary>
         /// The location of the software directory. Empty by default, meaning the it is in the root program.
