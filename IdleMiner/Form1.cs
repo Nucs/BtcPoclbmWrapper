@@ -20,22 +20,30 @@ namespace IdleMiner {
 
         private void btnStart_Click(object sender, EventArgs e) {
             try {
-                Miner.CollectFeedback = false;
-                Miner.MhashUpdated += mhps => Invoke(new MethodInvoker(()=> Text = "IdleMiner - " + mhps + " Mhash/s"));
-                Miner.Start("stratum.bitcoin.cz", 3333, "elibelash.elibelash", "qweqwe", false);
+                Miner.MhashUpdated += mhps => updateTitle();
+                Miner.SharesUpdated += (accepted, rejected) => updateTitle();
+                Miner.Start("stratum.bitcoin.cz", 3333, "elibelash.elibelash", "qweqwe", true);
                 btnStart.Enabled = false;
                 btnStop.Enabled = true;
+                updateTitle();
             } catch {} //silent catching
-
         }
 
         private void btnStop_Click(object sender, EventArgs e) {
             Miner.Stop();
             btnStop.Enabled = false;
             btnStart.Enabled = true;
+            this.Text = "IdleMiner";
         }
 
         private void dtTime_ValueChanged(object sender, EventArgs e) {
+
+        }
+
+        private void updateTitle() {
+            if (InvokeRequired) 
+                Invoke(new MethodInvoker(() => updateTitle()));
+            this.Text = "IdleMiner " + Miner.MhashPerSecond.ToString("0.00") + " Mhash/s - Shares "+Miner.Rejects+"/"+Miner.Shares;
 
         }
     }

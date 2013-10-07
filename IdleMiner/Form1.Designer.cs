@@ -32,11 +32,12 @@
             this.btnStop = new System.Windows.Forms.Button();
             this.dtTime = new System.Windows.Forms.DateTimePicker();
             this.lblIdle = new System.Windows.Forms.Label();
+            this.label1 = new System.Windows.Forms.Label();
             this.SuspendLayout();
             // 
             // btnStart
             // 
-            this.btnStart.Location = new System.Drawing.Point(9, 69);
+            this.btnStart.Location = new System.Drawing.Point(50, 67);
             this.btnStart.Name = "btnStart";
             this.btnStart.Size = new System.Drawing.Size(75, 23);
             this.btnStart.TabIndex = 0;
@@ -47,7 +48,7 @@
             // btnStop
             // 
             this.btnStop.Enabled = false;
-            this.btnStop.Location = new System.Drawing.Point(90, 69);
+            this.btnStop.Location = new System.Drawing.Point(131, 67);
             this.btnStop.Name = "btnStop";
             this.btnStop.Size = new System.Drawing.Size(75, 23);
             this.btnStop.TabIndex = 1;
@@ -59,7 +60,7 @@
             // 
             this.dtTime.CustomFormat = "";
             this.dtTime.Format = System.Windows.Forms.DateTimePickerFormat.Time;
-            this.dtTime.Location = new System.Drawing.Point(55, 40);
+            this.dtTime.Location = new System.Drawing.Point(96, 38);
             this.dtTime.Name = "dtTime";
             this.dtTime.ShowUpDown = true;
             this.dtTime.Size = new System.Drawing.Size(68, 20);
@@ -69,17 +70,27 @@
             // lblIdle
             // 
             this.lblIdle.AutoSize = true;
-            this.lblIdle.Location = new System.Drawing.Point(26, 11);
+            this.lblIdle.Location = new System.Drawing.Point(67, 9);
             this.lblIdle.Name = "lblIdle";
             this.lblIdle.Size = new System.Drawing.Size(134, 26);
             this.lblIdle.TabIndex = 3;
             this.lblIdle.Text = "The time from the last user \r\ninput to begin mining";
             // 
+            // label1
+            // 
+            this.label1.AutoSize = true;
+            this.label1.Location = new System.Drawing.Point(0, 93);
+            this.label1.Name = "label1";
+            this.label1.Size = new System.Drawing.Size(103, 13);
+            this.label1.TabIndex = 4;
+            this.label1.Text = "Currently it is manual";
+            // 
             // frmMain
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(173, 102);
+            this.ClientSize = new System.Drawing.Size(256, 112);
+            this.Controls.Add(this.label1);
             this.Controls.Add(this.lblIdle);
             this.Controls.Add(this.dtTime);
             this.Controls.Add(this.btnStop);
@@ -99,6 +110,7 @@
         private System.Windows.Forms.Button btnStop;
         private System.Windows.Forms.DateTimePicker dtTime;
         private System.Windows.Forms.Label lblIdle;
+        private System.Windows.Forms.Label label1;
     }
 }
 
