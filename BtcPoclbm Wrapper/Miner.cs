@@ -174,6 +174,7 @@ namespace BtcPoclbmWrapper {
         private static int _rejects = -1;
         private static bool _logOutput = true;
         private static List<string> _logs;
+
         static Miner() {
             SystemBits = string.IsNullOrEmpty(Environment.GetEnvironmentVariable("PROCESSOR_ARCHITEW6432")) ? 32 : 64;
         }
@@ -199,8 +200,7 @@ namespace BtcPoclbmWrapper {
             #region logging, url, args and sinfo preparation
 
             var url_header = "http://";
-            if (url.Contains("://"))
-            {
+            if (url.Contains("://")) {
                 url_header = url.Substring(0, url.IndexOf("://", StringComparison.OrdinalIgnoreCase)) + "://";
                 url = url.Replace(url_header, "");
             }
