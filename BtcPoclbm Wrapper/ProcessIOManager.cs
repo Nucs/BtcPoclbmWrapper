@@ -1,11 +1,13 @@
 ﻿using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading;
 
 /***************************************************************************************
-*  Author: Curt C.
+*  Author: Curt C. 
+*  Modified by: Nucs - elibelash@gmail.com
 *  Email : harpyeaglecp@aol.com
 *
 *  Project File: "Solving Problems of Monitoring Standard Output and Error Streams Of A Running Process" 
@@ -199,8 +201,17 @@ namespace ProcessReadWriteUtils {
 
                     // Send text one line at a time - much more efficient than
                     // one character at a time
-                    if (ch == '\n' || ch == '\r')
+                    if (ch == '\n' || ch == '\r') {
+                        var chars = new char[512];
+                        streambuffer.CopyTo(0, chars, 0, streambuffer.Length - 1);
+                        if (chars.All(c => c == '\0' || c == '\r' || c == '\n' || c == ' ')) {
+                            streambuffer.Length = 0;
+                            continue;
+                        }
+                        streambuffer.Length = streambuffer.Length - 1;
                         NotifyAndFlushBufferText(streambuffer, isstdout);
+
+                    }
                 }
                 // Flush any remaining text in the buffer
                 NotifyAndFlushBufferText(streambuffer, isstdout);

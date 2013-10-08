@@ -16,13 +16,21 @@ namespace IdleMiner {
             InitializeComponent();
             Miner.MinerLocation = "poclbm" + Miner.SystemBits + "\\";
             Application.ApplicationExit += (sender, args) => Miner.Stop(); //always make sure it will close
+            Miner.MhashUpdated += mhps => updateTitle();
+            Miner.SharesUpdated += (accepted, rejected) => updateTitle();
+            Miner.MinerCrashed += (logs, reason) => Invoke(new MethodInvoker(() =>
+            {
+                btnStop.Enabled = false;
+                btnStart.Enabled = true;
+                Text = "IdleMiner";
+                MessageBox.Show("The miner has crashed because: "+reason, "Miner has crashed", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }));
         }
 
         private void btnStart_Click(object sender, EventArgs e) {
             try {
-                Miner.MhashUpdated += mhps => updateTitle();
-                Miner.SharesUpdated += (accepted, rejected) => updateTitle();
-                Miner.Start("stratum.bitcoin.cz", 3333, "elibelash.elibelash", "qweqwe", true);
+                Miner.Start("http://stratum.bitcoin.cz", 3333, "elibelash.elibelash", "qwe", false);
+
                 btnStart.Enabled = false;
                 btnStop.Enabled = true;
                 updateTitle();

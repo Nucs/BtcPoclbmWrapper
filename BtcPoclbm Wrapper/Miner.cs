@@ -6,6 +6,8 @@ using System.IO;
 using System.Linq;
 using System.Management.Automation;
 using System.Management.Automation.Runspaces;
+using System.Security.AccessControl;
+using System.Security.Permissions;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -13,16 +15,26 @@ using System.Windows.Forms;
 using ProcessReadWriteUtils;
 
 namespace BtcPoclbmWrapper {
-
     public delegate void MhashUpdatedHandler(double mhps);
     public delegate void ShareUpdatedHandler(int accepted, int rejected);
+    public delegate void MinerCrashedHandler(List<string> logs, string reason);
+
     public static class Miner {
         //sample for query: poclbm.exe --device=0 --platform=0 --verbose -r1 elibelash.elibelash:qweqwe@api2.bitcoin.cz:8332 
         
         #region Properties and Events
-
+        /// <summary>
+        /// Invoked when new information about the current Mhash/s is given.
+        /// </summary>
         public static event MhashUpdatedHandler MhashUpdated;
+        /// <summary>
+        /// Invoked when either rejects or shares increments.
+        /// </summary>
         public static event ShareUpdatedHandler SharesUpdated;
+        /// <summary>
+        /// Invoked when the miner app seemed to crash,
+        /// </summary>
+        public static event MinerCrashedHandler MinerCrashed; 
 
         private static string _minerAppTarget = "poclbm.exe";
         private static string _minerLocation = "\\";
@@ -53,11 +65,11 @@ namespace BtcPoclbmWrapper {
         /// Returns a filename to the miner application
         /// </summary>
         public static FileInfo MinerFile {
-            get { return new FileInfo((MinerLocation) + MinerAppTarget); }
+            get { return new FileInfo(MinerLocation + MinerAppTarget); }
         }
 
         /// <summary>
-        /// Returns a filename to the miner application
+        /// Returns the path to the file to the miner application. e.g. C:\somedir\poclbm.exe
         /// </summary>
         public static string MinerFilePath {
             get { return MinerLocation + MinerAppTarget; }
@@ -67,7 +79,7 @@ namespace BtcPoclbmWrapper {
         /// Wether the process of the miner is open. for working status use <see cref="IsMining"/>.
         /// </summary>
         public static bool IsOpen {
-            get { return _miner != null && _miner.HasExited == false; } //todo perform test if the process actually exists.
+            get { return _miner != null && _miner.HasExited == false; }
         }
 
         /// <summary>
@@ -82,6 +94,32 @@ namespace BtcPoclbmWrapper {
         /// </summary>
         public static ProcessIOManager IOManager {
             get { return io_proc; }
+        }
+
+        /// <summary>
+        /// Should the output of poclbm.exe be logged (10 last outputs)? It will be passed at MinerCrashed event, otherwise null will be passed. 
+        /// Unlike other properties, the log won't be removed after 
+        /// by default true
+        /// </summary>
+        public static bool LogOutput {
+            get { return _logOutput; }
+            set {
+                _logOutput = value;
+                if (value == false) {
+                    _logs.Clear();
+                    _logs = null;
+                } else {
+                    if (_logs == null)
+                        _logs = new List<string>();
+                }
+            }
+        }
+
+        /// <summary>
+        /// 10 last outputs from poclbm. does not clear upon calling <see cref="Stop"/>. Controlled by <see cref="LogOutput"/> which is true by default.
+        /// </summary>
+        public static List<string> Logs {
+            get { return _logs; }
         }
 
         /// <summary>
@@ -134,7 +172,8 @@ namespace BtcPoclbmWrapper {
         private static ProcessIOManager io_proc = null;
         private static int _shares = -1;
         private static int _rejects = -1;
-
+        private static bool _logOutput = true;
+        private static List<string> _logs;
         static Miner() {
             SystemBits = string.IsNullOrEmpty(Environment.GetEnvironmentVariable("PROCESSOR_ARCHITEW6432")) ? 32 : 64;
         }
@@ -144,10 +183,11 @@ namespace BtcPoclbmWrapper {
         #region Methods
         #region Public
 
+
         /// <summary>
         /// Starts a controlled poclbm process.
         /// </summary>
-        /// <param name="url">The mining pool url. e.g. slush's pool: `stratum.bitcoin.cz`</param>
+        /// <param name="url">The mining pool url. e.g. slush's pool: `stratum.bitcoin.cz` or `https://stratum.bitcoin.cz` for specific url</param>
         /// <param name="port">Mining pool's port. e.g. slush's pool: 3333</param>
         /// <param name="username">Your worker's username. e.g. elibelash.worker1</param>
         /// <param name="password">Your worker's password.</param>
@@ -156,26 +196,38 @@ namespace BtcPoclbmWrapper {
         public static void Start(string url, ushort port, string username, string password, bool hide = true ,string arguments = "-r1") {
             if (IsOpen)
                 throw new InvalidOperationException("Unable to start because there is a miner already open");
+            #region logging, url, args and sinfo preparation
 
-            url = url.Replace("http://", "");
-            var args = string.Format("http://{0}:{1}@{2}:{3}", username, password, url, port);
+            var url_header = "http://";
+            if (url.Contains("://"))
+            {
+                url_header = url.Substring(0, url.IndexOf("://", StringComparison.OrdinalIgnoreCase)) + "://";
+                url = url.Replace(url_header, "");
+            }
+            if (_logs == null && LogOutput)
+                _logs = new List<string>();
+            if (_logs != null && LogOutput == false) {
+                _logs.Clear();
+                _logs = null;
+            }
 
-            _miner = new Process();
-            _miner.Exited += (sender, eventArgs) => Stop(); //self disposer
-            
-            var StartInfo = new ProcessStartInfo {  FileName = "cmd.exe",
+            var args = string.Format("{0}{1}:{2}@{3}:{4}", url_header ,username, password, url, port);
+            var sinfo = new ProcessStartInfo {  FileName = "cmd.exe",
                                                     WindowStyle = hide ? ProcessWindowStyle.Hidden : ProcessWindowStyle.Normal,
                                                     CreateNoWindow = hide,
                                                     UseShellExecute = false,
                                                     RedirectStandardInput = true,
                                                     RedirectStandardOutput = true  };
-            _miner.StartInfo = StartInfo;
+            #endregion
+
+            _miner = new Process() { StartInfo = sinfo };
+            _miner.Exited += (sender, eventArgs) => Stop(); //self disposer
             _miner.Start();
+            
             io_proc = new ProcessIOManager(_miner);
             io_proc.StartProcessOutputRead();
             io_proc.StdoutTextRead += reader;
-            /*@echo off cd " + AppDomain.CurrentDomain.BaseDirectory + MinerLocation 
-                                                    + string.Format("{0} {1} {2}", MinerAppTarget, arguments, args) */
+            /* @echo off cd " + AppDomain.CurrentDomain.BaseDirectory + MinerLocation + string.Format("{0} {1} {2}", MinerAppTarget, arguments, args) */
             _redirected_reader = _miner.StandardOutput;
             _redirected_writer = _miner.StandardInput;
 
@@ -184,8 +236,9 @@ namespace BtcPoclbmWrapper {
             _redirected_writer.WriteLine("{0} {1} {2}", MinerAppTarget, arguments, args);
         }
 
+
         public static void Stop() {
-            if (_miner != null) { //todo rethink this part
+            if (_miner != null) {
                 try {
                     if (_miner.HasExited == false)
                         _miner.Kill();
@@ -204,6 +257,10 @@ namespace BtcPoclbmWrapper {
                 _redirected_writer.Dispose();
                 _redirected_writer = null;
             }
+
+            if (IOManager != null)
+                io_proc = null;
+
             io_proc = null;
             //all set to null because non of them have a property for Disposed
             _megaHashPerSecond = -1; //represents that the miner is not mining. wont be updated till the first feedback from miner
@@ -236,9 +293,29 @@ namespace BtcPoclbmWrapper {
 
         #region Private
         private static void reader(string l) { //reads the output of the poclbm
-            if (string.IsNullOrEmpty(l) || l.Contains("    ") || l.Equals("\r\n")) //filtering unneeded messages
+            if (string.IsNullOrEmpty(l)) //filtering unneeded messages
+                return;
+            if (LogOutput && _logs != null) { //logging
+                _logs.Add(l);
+                while (_logs.Count > 10)
+                    _logs.RemoveAt(10); //remove the 11th item
+            }
+
+            //error checking, switch-if style.
+            if (l.StartsWith("At least one server is required")) {
+                if (MinerCrashed != null)
+                    MinerCrashed(_logs, "Invalid canidates, please see logs.");
+                Stop();
+                return;
+            }
+            if (l.Contains(" authorization failed with")) {
+                if (MinerCrashed != null)
+                    MinerCrashed(_logs, "Authorization failed with the given canidates");
+                Stop();
                 return;
 
+            }
+            
             var m = _regex_hash.Match(l);
             if (m.Success) {
                 //Mhash handling
