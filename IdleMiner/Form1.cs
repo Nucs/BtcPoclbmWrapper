@@ -49,10 +49,11 @@ namespace IdleMiner {
         }
 
         private void updateTitle() {
-            if (InvokeRequired) 
-                Invoke(new MethodInvoker(() => updateTitle()));
-            this.Text = "IdleMiner " + Miner.MhashPerSecond.ToString("0.00") + " Mhash/s - Shares "+Miner.Rejects+"/"+Miner.Shares;
-
+            if (InvokeRequired) {
+                Invoke(new MethodInvoker(updateTitle));
+                return;
+            }
+            Text = "IdleMiner " + Miner.MhashPerSecond.ToString("0.00") + " Mhash/s - Shares "+Miner.Rejects+"/"+Miner.Shares;
         }
     }
 }

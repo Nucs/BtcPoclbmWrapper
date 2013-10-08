@@ -13,6 +13,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using ProcessReadWriteUtils;
+using Timer = System.Timers.Timer;
 
 namespace BtcPoclbmWrapper {
     public delegate void MhashUpdatedHandler(double mhps);
@@ -166,17 +167,22 @@ namespace BtcPoclbmWrapper {
 
         private static Process _miner = null; //the miner proc
         private static double _megaHashPerSecond = -1d;
-        private static StreamReader _redirected_reader = null;
-        private static StreamWriter _redirected_writer = null;
         private static bool _collectFeedback = true;
         private static ProcessIOManager io_proc = null;
         private static int _shares = -1;
         private static int _rejects = -1;
         private static bool _logOutput = true;
         private static List<string> _logs;
-
-        static Miner() {
+        private static Timer _no_mine_tmr = new Timer(10000);
+        static Miner() {//_miner.Exited wont invoke untill a call on HasEnded at any part of the code has been called (ofc if the proc indeed exited).
             SystemBits = string.IsNullOrEmpty(Environment.GetEnvironmentVariable("PROCESSOR_ARCHITEW6432")) ? 32 : 64;
+            _no_mine_tmr.Elapsed += (sender, eventArgs) => 
+            {
+                if (_miner == null) return;
+                if (MinerCrashed != null)
+                    MinerCrashed(_logs, "Poclbm.exe timed out after 10 seconds of no respond.");
+                Stop();
+            };
         }
 
         #endregion
@@ -197,7 +203,7 @@ namespace BtcPoclbmWrapper {
         public static void Start(string url, ushort port, string username, string password, bool hide = true ,string arguments = "-r1") {
             if (IsOpen)
                 throw new InvalidOperationException("Unable to start because there is a miner already open");
-            #region logging, url, args and sinfo preparation
+            #region logging, url, tmr , args and sinfo preparation
 
             var url_header = "http://";
             if (url.Contains("://")) {
@@ -210,7 +216,7 @@ namespace BtcPoclbmWrapper {
                 _logs.Clear();
                 _logs = null;
             }
-
+            
             var args = string.Format("{0}{1}:{2}@{3}:{4}", url_header ,username, password, url, port);
             var sinfo = new ProcessStartInfo {  FileName = "cmd.exe",
                                                     WindowStyle = hide ? ProcessWindowStyle.Hidden : ProcessWindowStyle.Normal,
@@ -221,48 +227,47 @@ namespace BtcPoclbmWrapper {
             #endregion
 
             _miner = new Process() { StartInfo = sinfo };
-            _miner.Exited += (sender, eventArgs) => Stop(); //self disposer
-            _miner.Start();
+            _miner.Exited += (sender, eventArgs) => { _no_mine_tmr.Stop(); Stop(); }; //self disposer on user manual close.
             
+            _miner.Start();
+            _no_mine_tmr.Start();
+            //_miner.Exited wont invoke untill a call on HasEnded at any 
+            //part of the code has been called (ofc if the proc indeed exited).
+            //for this case, we call IsOpen at a below half-sec interval to give averagly reliable respond to user manually closing the window.
+            Task.Run(() => { while (IsOpen) Thread.Sleep(350); }); //this also dies with the program closing.
+
             io_proc = new ProcessIOManager(_miner);
             io_proc.StartProcessOutputRead();
             io_proc.StdoutTextRead += reader;
             /* @echo off cd " + AppDomain.CurrentDomain.BaseDirectory + MinerLocation + string.Format("{0} {1} {2}", MinerAppTarget, arguments, args) */
-            _redirected_reader = _miner.StandardOutput;
-            _redirected_writer = _miner.StandardInput;
 
-            _redirected_writer.WriteLine("@echo off");
-            _redirected_writer.WriteLine("cd " + AppDomain.CurrentDomain.BaseDirectory + MinerLocation); //the command you wish to run.....
-            _redirected_writer.WriteLine("{0} {1} {2}", MinerAppTarget, arguments, args);
+            io_proc.WriteStdin("@echo off");
+            io_proc.WriteStdin("cd " + AppDomain.CurrentDomain.BaseDirectory + MinerLocation);
+            io_proc.WriteStdin(string.Format("{0} {1} {2}", MinerAppTarget, arguments, args));
+
         }
 
 
         public static void Stop() {
             if (_miner != null) {
                 try {
-                    if (_miner.HasExited == false)
-                        _miner.Kill();
+                    if (_miner.HasExited == false) 
+                        _miner.CloseMainWindow();
                 } catch (Exception) {
-                    if (_miner != null) //after compiling it seemed that gc automatically set it as null after calling Kill(), even if it fails from lack of permission.
-                        _miner.Close();
+                    try {
+                        if (_miner != null) //after compiling it seemed that gc automatically set it as null after calling Kill(), even if it fails from lack of permission.
+                            _miner.Close();
+                    } catch {} //silent catching
                 }
                 _miner = null;
-            }
-
-            if (_redirected_reader != null) {
-                _redirected_reader.Dispose();
-                _redirected_reader = null;
-            }
-            if (_redirected_writer != null) {
-                _redirected_writer.Dispose();
-                _redirected_writer = null;
             }
 
             if (IOManager != null)
                 io_proc = null;
 
+            _no_mine_tmr.Stop();
+            
             io_proc = null;
-            //all set to null because non of them have a property for Disposed
             _megaHashPerSecond = -1; //represents that the miner is not mining. wont be updated till the first feedback from miner
             _shares = -1;
             _rejects = -1;
@@ -295,13 +300,17 @@ namespace BtcPoclbmWrapper {
         private static void reader(string l) { //reads the output of the poclbm
             if (string.IsNullOrEmpty(l)) //filtering unneeded messages
                 return;
+
+            _no_mine_tmr.Stop(); //aka reset.
+            _no_mine_tmr.Start();
+            
             if (LogOutput && _logs != null) { //logging
                 _logs.Add(l);
                 while (_logs.Count > 10)
                     _logs.RemoveAt(10); //remove the 11th item
             }
 
-            //error checking, switch-if style.
+            //message based error checking, switch-if style.
             if (l.StartsWith("At least one server is required")) {
                 if (MinerCrashed != null)
                     MinerCrashed(_logs, "Invalid canidates, please see logs.");
@@ -313,7 +322,6 @@ namespace BtcPoclbmWrapper {
                     MinerCrashed(_logs, "Authorization failed with the given canidates");
                 Stop();
                 return;
-
             }
             
             var m = _regex_hash.Match(l);
