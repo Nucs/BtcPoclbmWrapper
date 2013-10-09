@@ -14,7 +14,7 @@ namespace IdleMiner {
     public partial class frmMain : Form {
         public frmMain() {
             InitializeComponent();
-            Miner.MinerLocation = "poclbm" + Miner.SystemBits + "\\";
+            Miner.MinerLocation = AppDomain.CurrentDomain.BaseDirectory + "poclbm" + Miner.SystemBits + "\\";
             Application.ApplicationExit += (sender, args) => Miner.Stop(); //always make sure it will close
             Miner.MhashUpdated += mhps => updateTitle();
             Miner.SharesUpdated += (accepted, rejected) => updateTitle();
@@ -29,7 +29,7 @@ namespace IdleMiner {
 
         private void btnStart_Click(object sender, EventArgs e) {
             try {
-                Miner.Start("http://stratum.bitcoin.cz", 3333, "elibelash.idleminer", "1234", false);
+                Miner.Start("http://stratum.bitcoin.cz", 3333, "elibelash.idleminer", "1234", true);
 
                 btnStart.Enabled = false;
                 btnStop.Enabled = true;

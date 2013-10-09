@@ -246,7 +246,7 @@ namespace BtcPoclbmWrapper {
             /* @echo off cd " + AppDomain.CurrentDomain.BaseDirectory + MinerLocation + string.Format("{0} {1} {2}", MinerAppTarget, arguments, args) */
 
             io_proc.WriteStdin("@echo off");
-            io_proc.WriteStdin("cd " + AppDomain.CurrentDomain.BaseDirectory + MinerLocation);
+            io_proc.WriteStdin("cd " + MinerLocation);
             io_proc.WriteStdin(string.Format("{0} {1} {2}", MinerAppTarget, arguments, args));
 
         }
