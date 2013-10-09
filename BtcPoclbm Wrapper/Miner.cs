@@ -200,9 +200,13 @@ namespace BtcPoclbmWrapper {
         /// <param name="password">Your worker's password.</param>
         /// <param name="hide">Should it launch hidden (in the background) or with a window</param>
         /// <param name="arguments">Extra arguments that you want to pass. Please do not pass the following: `--varbose`;</param>
+        /// <exception cref="IOException">When file <see cref="MinerFilePath"/> doesn't exist</exception>
+        /// <exception cref="InvalidOperationException">When the miner is already started</exception>
         public static void Start(string url, ushort port, string username, string password, bool hide = true ,string arguments = "-r1") {
             if (IsOpen)
                 throw new InvalidOperationException("Unable to start because there is a miner already open");
+            if (File.Exists(MinerFilePath) == false)
+                throw new IOException("Couldn't find poclbm.exe at "+MinerFilePath);
             #region logging, url, tmr , args and sinfo preparation
 
             var url_header = "http://";
