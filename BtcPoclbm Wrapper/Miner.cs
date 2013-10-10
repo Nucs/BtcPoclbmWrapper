@@ -166,6 +166,7 @@ namespace BtcPoclbmWrapper {
         public static readonly int SystemBits;
 
         private static Process _miner = null; //the miner proc
+        private static Process _cmd = null; //the miner proc
         private static double _megaHashPerSecond = -1d;
         private static bool _collectFeedback = true;
         private static ProcessIOManager io_proc = null;
@@ -230,25 +231,31 @@ namespace BtcPoclbmWrapper {
                                                     RedirectStandardOutput = true  };
             #endregion
 
-            _miner = new Process() { StartInfo = sinfo };
-            _miner.Exited += (sender, eventArgs) => { _no_mine_tmr.Stop(); Stop(); }; //self disposer on user manual close.
-            
-            _miner.Start();
+            _cmd = new Process() { StartInfo = sinfo };
+            _cmd.Exited += (sender, eventArgs) => { _no_mine_tmr.Stop(); Stop(); }; //self disposer on user manual close.
+
+            _cmd.Start();
             _no_mine_tmr.Start();
             //_miner.Exited wont invoke untill a call on HasEnded at any 
             //part of the code has been called (ofc if the proc indeed exited).
             //for this case, we call IsOpen at a below half-sec interval to give averagly reliable respond to user manually closing the window.
             Task.Run(() => { while (IsOpen) Thread.Sleep(350); }); //this also dies with the program closing.
 
-            io_proc = new ProcessIOManager(_miner);
-            io_proc.StartProcessOutputRead();
+            io_proc = new ProcessIOManager(_cmd);
             io_proc.StdoutTextRead += reader;
+            io_proc.StartProcessOutputRead();
             /* @echo off cd " + AppDomain.CurrentDomain.BaseDirectory + MinerLocation + string.Format("{0} {1} {2}", MinerAppTarget, arguments, args) */
-
+            KillExistingPoclbm();
             io_proc.WriteStdin("@echo off");
             io_proc.WriteStdin("cd " + MinerLocation);
             io_proc.WriteStdin(string.Format("{0} {1} {2}", MinerAppTarget, arguments, args));
-
+            _miner = BindToPoclbm();
+            if (_miner == null) {
+                if (MinerCrashed != null)
+                    MinerCrashed(_logs, "Could not bind to the poclbm process. (It was not found)");
+                Stop();
+                return;
+            }
         }
 
 
@@ -256,7 +263,9 @@ namespace BtcPoclbmWrapper {
             if (_miner != null) {
                 try {
                     if (_miner.HasExited == false) 
-                        _miner.CloseMainWindow();
+                        //
+                        _miner.Kill();
+                        //_miner.CloseMainWindow();
                 } catch (Exception) {
                     try {
                         if (_miner != null) //after compiling it seemed that gc automatically set it as null after calling Kill(), even if it fails from lack of permission.
@@ -264,6 +273,21 @@ namespace BtcPoclbmWrapper {
                     } catch {} //silent catching
                 }
                 _miner = null;
+            }
+
+            if (_cmd != null) {
+                try {
+                    if (_cmd.HasExited == false) 
+                        //
+                        _cmd.Kill();
+                        //_miner.CloseMainWindow();
+                } catch (Exception) {
+                    try {
+                        if (_cmd != null) //after compiling it seemed that gc automatically set it as null after calling Kill(), even if it fails from lack of permission.
+                            _cmd.Close();
+                    } catch {} //silent catching
+                }
+                _cmd = null;
             }
 
             if (IOManager != null)
@@ -351,7 +375,37 @@ namespace BtcPoclbmWrapper {
                     SharesUpdated(_shares, _rejects);
             }
         }
+
+        private static void KillExistingPoclbm() {
+            var procs = Process.GetProcesses().Where(n => n.ProcessName.Contains("poclbm"));
+            foreach (var p in procs) {
+                try {
+                    p.Kill();
+                } catch (Exception e) {
+                    throw;
+                }
+            }
+        }
+
+        private static Process BindToPoclbm() {
+            var t = Task.Run(() => 
+            {
+                Process res;
+                _retry:
+                        
+                res = Process.GetProcesses().FirstOrDefault(n => n.ProcessName.Contains("poclbm"));
+
+                if (res == null) {
+                    Thread.Sleep(2);
+                    goto _retry;
+                }
+                return res;
+            });
+            return t.Wait(1500) ? t.Result : null;
+        }
+
         #endregion
+
         #endregion
 
     }
