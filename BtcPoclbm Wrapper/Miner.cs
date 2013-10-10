@@ -400,16 +400,22 @@ namespace BtcPoclbmWrapper {
         }*/
 
         private static Process BindToPoclbm() {
+            bool cancel = false;
             var t = Task.Run(() => {
                 _retry:
                 Process res = Process.GetProcessesByName("poclbm").OrderByDescending(p => p.StartTime.Ticks).FirstOrDefault();
                 if (res == null) {
                     Thread.Sleep(2);
+                    if (cancel)
+                        return null;
                     goto _retry;
                 }
                 return res;
             });
-            return t.Wait(1500) ? t.Result : null;
+            if (t.Wait(5000))
+                return t.Result;
+            cancel = true;
+            return null;
         }
 
         #endregion
