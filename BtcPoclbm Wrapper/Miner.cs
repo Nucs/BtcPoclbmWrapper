@@ -211,8 +211,6 @@ namespace BtcPoclbmWrapper {
                 throw new IOException("Couldn't find poclbm.exe at "+MinerFilePath);
             #region logging, url, tmr , args and sinfo preparation
 
-            KillExistingPoclbm();
-
             var url_header = "http://";
             if (url.Contains("://")) {
                 url_header = url.Substring(0, url.IndexOf("://", StringComparison.OrdinalIgnoreCase)) + "://";
@@ -269,6 +267,7 @@ namespace BtcPoclbmWrapper {
 
 
         public static void Stop() {
+            _no_mine_tmr.Stop();
             if (_cmd != null) {
                 try {
                     if (_cmd.HasExited == false) {
@@ -299,8 +298,6 @@ namespace BtcPoclbmWrapper {
 
             if (IOManager != null)
                 io_proc = null;
-
-            _no_mine_tmr.Stop();
             
             io_proc = null;
             _megaHashPerSecond = -1; //represents that the miner is not mining. wont be updated till the first feedback from miner
@@ -391,7 +388,7 @@ namespace BtcPoclbmWrapper {
             }
         }
 
-        private static void KillExistingPoclbm() {
+        /*private static void KillExistingPoclbm() {
             var procs = Process.GetProcesses().Where(n => n.ProcessName.Contains("poclbm"));
             foreach (var p in procs) {
                 try {
@@ -400,16 +397,12 @@ namespace BtcPoclbmWrapper {
                     throw;
                 }
             }
-        }
+        }*/
 
         private static Process BindToPoclbm() {
-            var t = Task.Run(() => 
-            {
-                Process res;
+            var t = Task.Run(() => {
                 _retry:
-                        
-                res = Process.GetProcesses().FirstOrDefault(n => n.ProcessName.Contains("poclbm"));
-
+                Process res = Process.GetProcessesByName("poclbm").OrderByDescending(p => p.StartTime.Ticks).FirstOrDefault();
                 if (res == null) {
                     Thread.Sleep(2);
                     goto _retry;

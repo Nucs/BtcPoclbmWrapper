@@ -29,7 +29,7 @@ namespace IdleMiner {
 
         private void btnStart_Click(object sender, EventArgs e) {
             try {
-                Miner.Start("http://stratum.bitcoin.cz", 3333, "elibelash.idleminer", "1234", true);
+                Miner.Start("stratum.bitcoin.cz", 3333, "elibelash.elibelash", "qweqwe", false);
                 btnStart.Enabled = false;
                 btnStop.Enabled = true;
                 updateTitle();
