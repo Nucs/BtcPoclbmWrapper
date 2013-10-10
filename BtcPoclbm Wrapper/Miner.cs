@@ -175,14 +175,14 @@ namespace BtcPoclbmWrapper {
         private static int _rejects = -1;
         private static bool _logOutput = true;
         private static List<string> _logs;
-        private static Timer _no_mine_tmr = new Timer(10000);
+        private static Timer _no_mine_tmr = new Timer(30000);
         static Miner() {//_miner.Exited wont invoke untill a call on HasEnded at any part of the code has been called (ofc if the proc indeed exited).
             SystemBits = string.IsNullOrEmpty(Environment.GetEnvironmentVariable("PROCESSOR_ARCHITEW6432")) ? 32 : 64;
             _no_mine_tmr.Elapsed += (sender, eventArgs) => 
             {
                 if (_cmd == null) return;
                 if (MinerCrashed != null)
-                    MinerCrashed(_logs, "Poclbm.exe timed out after 10 seconds of no respond.");
+                    MinerCrashed(_logs, "Poclbm.exe timed out after 30 seconds of no respond.");
                 Stop();
             };
         }
@@ -242,6 +242,9 @@ namespace BtcPoclbmWrapper {
             io_proc.StartProcessOutputRead();
             io_proc.StdoutTextRead += reader;
 
+            //invoke to start using
+            var a = _cmd.StandardOutput;
+            var b = _cmd.StandardInput;
             //_miner.Exited wont invoke untill a call on HasEnded at any 
             //part of the code has been called (ofc if the proc indeed exited).
             //for this case, we call IsOpen at a below half-sec interval to give averagly reliable respond to user manually closing the window.
@@ -253,14 +256,13 @@ namespace BtcPoclbmWrapper {
             io_proc.WriteStdin("cd " + MinerLocation);
             io_proc.WriteStdin(string.Format("{0} {1} {2}", MinerAppTarget, arguments, args));
             Task.Run(() => {
-                         _miner = BindToPoclbm();
-                         if (_miner == null) {
-                            if (MinerCrashed != null)
-                                MinerCrashed(_logs, "Could not bind to the poclbm process. (It was not found)");
-                            Stop();
-                            return;
-                        }
-                     });
+                _miner = BindToPoclbm();
+                if (_miner == null) {
+                if (MinerCrashed != null)
+                    MinerCrashed(_logs, "Could not bind to the poclbm process. (It was not found)");
+                Stop();
+                return;
+            }});
             
             _no_mine_tmr.Start();
         }
@@ -333,7 +335,7 @@ namespace BtcPoclbmWrapper {
         private static void reader(string l) { //reads the output of the poclbm
             if (string.IsNullOrEmpty(l)) //filtering unneeded messages
                 return;
-
+            //"stratum.bitcoin.cz:3333 10/10/2013 10:40:14, IO errors - 1, tolerance 2"
             _no_mine_tmr.Stop(); //aka reset.
             _no_mine_tmr.Start();
             
@@ -356,6 +358,14 @@ namespace BtcPoclbmWrapper {
                 Stop();
                 return;
             }
+
+            if (l.Contains("Failed to subscribe")) {
+                if (MinerCrashed != null)
+                    MinerCrashed(_logs, "Failed to subscribe with the given canidates, meaning the worker is already in use.");
+                Stop();
+                return;
+            }
+                
             
             var m = _regex_hash.Match(l);
             if (m.Success) {
