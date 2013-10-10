@@ -177,7 +177,7 @@ namespace BtcPoclbmWrapper {
         private static List<string> _logs;
         private static Timer _no_mine_tmr = new Timer(30000);
         static Miner() {//_miner.Exited wont invoke untill a call on HasEnded at any part of the code has been called (ofc if the proc indeed exited).
-            SystemBits = string.IsNullOrEmpty(Environment.GetEnvironmentVariable("PROCESSOR_ARCHITEW6432")) ? 32 : 64;
+            SystemBits = Environment.Is64BitOperatingSystem ? 64 : 32; //string.IsNullOrEmpty(Environment.GetEnvironmentVariable("PROCESSOR_ARCHITEW6432")) ? 32 : 64;
             _no_mine_tmr.Elapsed += (sender, eventArgs) => 
             {
                 if (_cmd == null) return;
