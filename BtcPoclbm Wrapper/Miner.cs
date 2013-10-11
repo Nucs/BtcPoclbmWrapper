@@ -80,7 +80,7 @@ namespace BtcPoclbmWrapper {
         /// Wether the process of the miner is open. for working status use <see cref="IsMining"/>.
         /// </summary>
         public static bool IsOpen {
-            get { return (_cmd != null || _miner != null) && ((_cmd != null && _cmd.HasExited == false) || (_miner != null && _miner.HasExited == false)); }
+            get { return (_cmd != null || _miner != null); }
         }
 
         /// <summary>
