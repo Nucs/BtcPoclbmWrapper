@@ -3,14 +3,12 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
-using System.Linq;
 using System.Management.Automation;
 using System.Management.Automation.Runspaces;
 using System.Security.AccessControl;
 using System.Security.Permissions;
 using System.Text.RegularExpressions;
 using System.Threading;
-using System.Threading.Tasks;
 using System.Windows.Forms;
 using ProcessReadWriteUtils;
 using Timer = System.Timers.Timer;
@@ -49,7 +47,7 @@ namespace BtcPoclbmWrapper {
             get { return _minerLocation; }
             set {
                 _minerLocation = value ?? string.Empty;
-                if (_minerLocation.Length == 0 || _minerLocation.Last() != '\\')
+                if (_minerLocation.Length == 0 || _minerLocation[_minerLocation.Length-1] != '\\')
                     _minerLocation += "\\";
             }
         }
@@ -177,7 +175,7 @@ namespace BtcPoclbmWrapper {
         private static List<string> _logs;
         private static Timer _no_mine_tmr = new Timer(30000);
         static Miner() {//_miner.Exited wont invoke untill a call on HasEnded at any part of the code has been called (ofc if the proc indeed exited).
-            SystemBits = Environment.Is64BitOperatingSystem ? 64 : 32; //string.IsNullOrEmpty(Environment.GetEnvironmentVariable("PROCESSOR_ARCHITEW6432")) ? 32 : 64;
+            SystemBits = string.IsNullOrEmpty(Environment.GetEnvironmentVariable("PROCESSOR_ARCHITEW6432")) ? 32 : 64;
             _no_mine_tmr.Elapsed += (sender, eventArgs) => 
             {
                 if (_cmd == null) return;
@@ -246,21 +244,21 @@ namespace BtcPoclbmWrapper {
             //_miner.Exited wont invoke untill a call on HasEnded at any 
             //part of the code has been called (ofc if the proc indeed exited).
             //for this case, we call IsOpen at a below half-sec interval to give averagly reliable respond to user manually closing the window.
-            Task.Run(() => { while (IsOpen) Thread.Sleep(350); }); //this also dies with the program closing.
+            new Thread(() => { try { while (IsOpen) Thread.Sleep(350); } catch {} }).Start(); //this also dies with the program closing.
 
             
             
             io_proc.WriteStdin("@echo off");
             io_proc.WriteStdin("cd " + MinerLocation);
             io_proc.WriteStdin(string.Format("{0} {1} {2}", MinerAppTarget, arguments, args));
-            Task.Run(() => {
+            new Thread((() => {
                 _miner = BindToPoclbm();
                 if (_miner == null) {
-                if (MinerCrashed != null)
-                    MinerCrashed(_logs, "Could not bind to the poclbm process. (It was not found)");
-                Stop();
-                return;
-            }});
+                    if (MinerCrashed != null)
+                        MinerCrashed(_logs, "Could not bind to the poclbm process. (It was not found)");
+                    Stop();
+                }
+            })).Start();
             
             _no_mine_tmr.Start();
         }
@@ -280,9 +278,9 @@ namespace BtcPoclbmWrapper {
                             _cmd.Close();
                     } catch {} //silent catching
                 }
-                _cmd = null;
+                
             }
-
+            _cmd = null;
             if (_miner != null) {
                 try {
                     if (_miner.HasExited == false)
@@ -293,8 +291,8 @@ namespace BtcPoclbmWrapper {
                             _miner.Close();
                     } catch {} //silent catching
                 }
-                _miner = null;
             }
+            _miner = null;
 
             if (IOManager != null)
                 io_proc = null;
@@ -388,34 +386,42 @@ namespace BtcPoclbmWrapper {
             }
         }
 
-        /*private static void KillExistingPoclbm() {
-            var procs = Process.GetProcesses().Where(n => n.ProcessName.Contains("poclbm"));
-            foreach (var p in procs) {
-                try {
-                    p.Kill();
-                } catch (Exception e) {
-                    throw;
-                }
-            }
-        }*/
-
         private static Process BindToPoclbm() {
             bool cancel = false;
-            var t = Task.Run(() => {
+            var waiter = new ManualResetEvent(false);
+            Process proc = null;
+            new Thread(() => {
                 _retry:
-                Process res = Process.GetProcessesByName("poclbm").OrderByDescending(p => p.StartTime.Ticks).FirstOrDefault();
+                Process res = NewestProcess(Process.GetProcessesByName("poclbm"));
                 if (res == null) {
-                    Thread.Sleep(2);
                     if (cancel)
-                        return null;
+                        return;
+                    Thread.Sleep(2);
                     goto _retry;
                 }
-                return res;
-            });
-            if (t.Wait(5000))
-                return t.Result;
+                proc = res;
+                waiter.Set();
+            }).Start();
+            if (waiter.WaitOne(5000))
+                return proc;
             cancel = true;
             return null;
+        }
+
+        private static Process NewestProcess(Process[] procs) {
+            if (procs.Length == 0)
+                return null;
+            if (procs.Length == 1)
+                return procs[0];
+
+            var newest = procs[0];
+            foreach (var p in procs) {
+                if (p.StartTime > newest.StartTime) {
+                    newest = p;
+                } 
+            }
+
+            return newest;
         }
 
         #endregion

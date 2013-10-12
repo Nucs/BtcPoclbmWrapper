@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
 using System.Text;
 using System.Threading;
 
@@ -201,13 +200,16 @@ namespace ProcessReadWriteUtils {
 
                     // Send text one line at a time - much more efficient than
                     // one character at a time
-                    if (ch == '\n' || ch == '\r') {
+                    if (ch == '\n' || ch == '\r' || ch == '\0') {
                         var chars = new char[512];
                         streambuffer.CopyTo(0, chars, 0, streambuffer.Length - 1);
-                        if (chars.All(c => c == '\0' || c == '\r' || c == '\n' || c == ' ')) {
-                            streambuffer.Length = 0;
-                            continue;
-                        }
+                        foreach (var c in chars) 
+                            if ((c == '\0' || c == '\r' || c == '\n' || c == ' ') == false) 
+                                goto _not_all;
+
+                        streambuffer.Length = 0;
+                        continue;
+                        _not_all:
                         streambuffer.Length = streambuffer.Length - 1;
                         NotifyAndFlushBufferText(streambuffer, isstdout);
 
