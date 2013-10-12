@@ -8,3 +8,7 @@ This project is currently developed on .net-4.5.1-RC, but it can be downgraded a
 ---------------------
 Please note that the mining pool creditals that are in the IdleMiner project example may be in use at any time by someone else which leads to "Failed to subscribe" MinerCrashed event.
 To get your own creditals please visit: http://mining.bitcoin.cz/ and create a new worker.
+
+Quickstart
+--------------------
+For a quickstart tutorial see [this](https://github.com/Nucs/BtcPoclbmWrapper/blob/master/BtcPoclbm%20Wrapper/Sample.cs)
